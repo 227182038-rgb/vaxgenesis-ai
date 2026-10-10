@@ -1,0 +1,61 @@
+# Audit 3.2 — mTLS between microservices via Istio
+#
+# This manifest installs Istio PeerAuthentication in STRICT mode,
+# forcing all inter-pod traffic in the vaxgenesis namespace to use mTLS.
+
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: vaxgenesis-default
+  namespace: vaxgenesis
+spec:
+  mtls:
+    mode: STRICT
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: vaxgenesis-deny-all-default
+  namespace: vaxgenesis
+spec:
+  {}
+  # Empty selector = applies to all workloads in the namespace.
+  # Default action is DENY unless an allow rule matches.
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: vaxgenesis-allow-namespace-internal
+  namespace: vaxgenesis
+spec:
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals: ["cluster.local/ns/vaxgenesis/*"]
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: vaxgenesis-allow-ingress
+  namespace: vaxgenesis
+spec:
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            namespaces: ["istio-system"]
+    - to:
+        - operation:
+            ports: ["8000", "3000"]
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: vaxgenesis-mtls
+  namespace: vaxgenesis
+spec:
+  host: "*.vaxgenesis.svc.cluster.local"
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL

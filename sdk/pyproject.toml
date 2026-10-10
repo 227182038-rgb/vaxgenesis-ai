@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vaxgenesis-sdk"
+version = "2.0.0"
+description = "Python SDK for the VaxGenesis AI vaccine digital twin platform"
+readme = "README.md"
+license = { text = "Proprietary" }
+requires-python = ">=3.10"
+dependencies = [
+    "httpx>=0.27,<0.29",
+    "pydantic>=2.5,<3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "respx>=0.21",
+]
+
+[project.urls]
+Homepage = "https://github.com/vaxgenesis/vaxgenesis-ai"
+Documentation = "https://docs.vaxgenesis.ai"
+Repository = "https://github.com/vaxgenesis/vaxgenesis-ai"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.setuptools.package-data]
+vaxgenesis_sdk = ["py.typed"]

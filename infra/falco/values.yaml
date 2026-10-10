@@ -1,0 +1,56 @@
+# Audit v2.0 — Falco runtime security
+#
+# Falco monitors syscalls at runtime and alerts on suspicious activity:
+#   - Shell opened in a container
+#   - File read from /etc/shadow
+#   - Outbound connection to known-bad IP
+#   - Privilege escalation
+#   - Kubernetes API server accessed from unexpected pod
+
+---
+# Falco Helm chart values (install via: helm install falco falcosecurity/falco -f infra/falco/values.yaml)
+# This file documents the production Falco configuration.
+
+falcosidekick:
+  enabled: true
+  config:
+    slack:
+      webhookurl: "${SLACK_WEBHOOK_URL}"
+      minimumpriority: warning
+    teams:
+      webhookurl: "${TEAMS_WEBHOOK_URL}"
+      minimumpriority: error
+
+customRules:
+  # VaxGenesis-specific rules
+  vaxgenesis_rules.yaml: |-
+    - macro: vaxgenesis_namespace
+      condition: k8s.ns.name = "vaxgenesis"
+
+    - rule: Shell opened in VaxGenesis container
+      desc: Detect shell execution inside a VaxGenesis pod (should never happen)
+      condition: spawned_process and vaxgenesis_namespace and (proc.name in (bash, sh, zsh, ash))
+      output: "Shell opened in VaxGenesis container (user=%user.name pod=%k8s.pod.name container=%container.name ns=%k8s.ns.name cmd=%proc.cmdline)"
+      priority: WARNING
+      tags: [container, shell, vaxgenesis]
+
+    - rule: Database credentials file read
+      desc: Unexpected access to database credential files
+      condition: open_read and vaxgenesis_namespace and (fd.name in (/etc/postgres, /run/secrets/db-credentials))
+      output: "Database credential file read (user=%user.name pod=%k8s.pod.name file=%fd.name)"
+      priority: CRITICAL
+      tags: [credentials, database, vaxgenesis]
+
+    - rule: Outbound connection from worker to non-whitelisted IP
+      desc: Worker pod making outbound connection to unexpected destination
+      condition: inbound_outbound and vaxgenesis_namespace and k8s.pod.name startswith "worker" and not fd.sip.name in (github.com, pypi.org, files.pythonhosted.org, registry.npmjs.org)
+      output: "Worker outbound to non-whitelisted IP (pod=%k8s.pod.name dest=%fd.sip:%fd.sport)"
+      priority: WARNING
+      tags: [network, worker, vaxgenesis]
+
+    - rule: GPU memory access from non-ML pod
+      desc: Non-ML pod accessing GPU resources
+      condition: vaxgenesis_namespace and not k8s.pod.name startswith "worker" and evt.type in (open, openat, openat2) and fd.name startswith /dev/nvidia
+      output: "GPU access from non-worker pod (pod=%k8s.pod.name file=%fd.name)"
+      priority: ERROR
+      tags: [gpu, vaxgenesis]

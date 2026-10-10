@@ -1,0 +1,10 @@
+{
+  "name": "SARS-CoV-2 ancestral Wuhan-Hu-1",
+  "lineage": "A",
+  "source": "nextstrain",
+  "source_acc": "NEXTSTRAIN_NCOV_ANCESTRAL",
+  "sequence": "ATTAAAGGTTTATACCTTCCCAGGTAACAAACCAACCAACTTTCGATCTCTTGTAGATCT",
+  "collection_date": "2020-01-01T00:00:00Z",
+  "geography": "China",
+  "mutations": []
+}

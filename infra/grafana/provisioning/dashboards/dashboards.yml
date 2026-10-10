@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: "VaxGenesis Dashboards"
+    orgId: 1
+    folder: "VaxGenesis"
+    type: file
+    options: { path: /var/lib/grafana/dashboards }

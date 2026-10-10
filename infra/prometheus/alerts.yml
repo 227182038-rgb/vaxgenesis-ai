@@ -1,0 +1,106 @@
+# Audit 4.7 — Prometheus alerting rules + SLO definitions
+#
+# Defines Service Level Objectives and the alerts that fire when they're breached.
+
+groups:
+  - name: vaxgenesis_api_slo
+    interval: 30s
+    rules:
+      - alert: ApiHighErrorRate
+        expr: |
+          (
+            sum(rate(vaxgenesis_http_requests_total{status=~"5.."}[5m]))
+            /
+            sum(rate(vaxgenesis_http_requests_total[5m]))
+          ) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          slo: "api_success_rate"
+        annotations:
+          summary: "API error rate above 1% SLO"
+          description: "5xx error rate is {{ $value | humanizePercentage }} over the last 5 minutes (SLO: <1%)"
+
+      - alert: ApiHighLatencyP95
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(vaxgenesis_http_request_duration_seconds_bucket[5m])) by (le, endpoint)
+          ) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          slo: "api_p95_latency"
+        annotations:
+          summary: "API P95 latency above 200ms SLO"
+          description: "Endpoint {{ $labels.endpoint }} P95 is {{ $value }}s (SLO: <200ms)"
+
+      - alert: ApiNoTraffic
+        expr: sum(rate(vaxgenesis_http_requests_total[5m])) == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No API traffic for 10 minutes"
+          description: "Backend has received zero requests in 10 minutes — possible outage"
+
+  - name: vaxgenesis_pipeline_slo
+    interval: 60s
+    rules:
+      - alert: ModuleHighFailureRate
+        expr: |
+          sum(rate(vaxgenesis_module_executions_total{status="failed"}[15m]))
+          /
+          sum(rate(vaxgenesis_module_executions_total[15m]))
+          > 0.1
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Module failure rate > 10%"
+          description: "More than 10% of module executions are failing"
+
+  - name: vaxgenesis_surveillance_slo
+    interval: 60s
+    rules:
+      - alert: SurveillanceEscapesCritical
+        expr: increase(vaxgenesis_surveillance_escapes_total{level="critical"}[5m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical escape variant detected"
+          description: "A variant with escape_score > 0.6 has been detected — autonomous reformulation triggered"
+
+  - name: vaxgenesis_learning_slo
+    interval: 60s
+    rules:
+      - alert: ActiveLearningQueueBacklog
+        expr: vaxgenesis_active_learning_queue_size > 500
+        for: 30m
+        labels:
+          severity: warning
+          slo: "active_learning_queue_size"
+        annotations:
+          summary: "Active learning queue backlog > 500"
+          description: "Active learning queue has more than 500 items"
+
+  - name: vaxgenesis_infra
+    interval: 30s
+    rules:
+      - alert: BackendPodCrashLooping
+        expr: rate(kube_pod_container_status_restarts_total{namespace="vaxgenesis",container="backend"}[15m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backend pod is crash-looping"
+          description: "Backend container has restarted {{ $value }} times in 15 minutes"
+
+      - alert: DatabaseConnectionsHigh
+        expr: pg_stat_activity_count > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL connection count > 80"
+          description: "Database is approaching connection pool limit"

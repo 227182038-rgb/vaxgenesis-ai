@@ -1,0 +1,63 @@
+# Audit 4.7 — Alertmanager configuration
+#
+# Routes Prometheus alerts to the appropriate notification channel.
+
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ["alertname", "service"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: "default"
+
+  routes:
+    # Critical alerts → PagerDuty immediately
+    - matchers:
+        - severity="critical"
+      receiver: "pagerduty"
+      group_wait: 0s
+      repeat_interval: 1h
+
+    # Warnings → Slack
+    - matchers:
+        - severity="warning"
+      receiver: "slack"
+      group_wait: 5m
+      repeat_interval: 4h
+
+    # SLO breaches → both PagerDuty and Slack
+    - matchers:
+        - slo=~".+"
+      receiver: "pagerduty"
+      continue: true
+      group_wait: 0s
+
+receivers:
+  - name: "default"
+    webhook_configs:
+      - url: "http://backend:8000/api/v1/internal/alerts"
+        send_resolved: true
+
+  - name: "pagerduty"
+    pagerduty_configs:
+      - routing_key: "${PAGERDUTY_ROUTING_KEY}"
+        description: "{{ .CommonLabels.alertname }}: {{ .CommonAnnotations.summary }}"
+        severity: "{{ if eq .CommonLabels.severity \"critical\" }}critical{{ else }}error{{ end }}"
+
+  - name: "slack"
+    slack_configs:
+      - api_url: "${SLACK_WEBHOOK_URL}"
+        channel: "#vaxgenesis-alerts"
+        title: "[{{ .Status }}] {{ .CommonLabels.alertname }}"
+        text: "{{ .CommonAnnotations.description }}"
+        send_resolved: true
+
+inhibit_rules:
+  # If a critical alert is firing, suppress warnings on the same service
+  - source_matchers:
+      - severity="critical"
+    target_matchers:
+      - severity="warning"
+    equal: ["service"]

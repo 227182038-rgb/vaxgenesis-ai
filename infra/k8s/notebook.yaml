@@ -1,0 +1,89 @@
+# Audit v1.2 — Kubernetes ConfigMap for Jupyter notebooks
+#
+# Mounts the platform walkthrough notebook into a Jupyter pod
+# for internal demos and onboarding.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vaxgenesis-notebooks
+  namespace: vaxgenesis
+data:
+  platform_walkthrough.ipynb: |
+    {
+      "cells": [
+        {
+          "cell_type": "markdown",
+          "metadata": {},
+          "source": [
+            "# VaxGenesis AI — Platform Walkthrough (K8s mount)\n",
+            "\n",
+            "This notebook is mounted from the vaxgenesis-notebooks ConfigMap.\n",
+            "See the full version in the repository at notebooks/platform_walkthrough.ipynb."
+          ]
+        }
+      ],
+      "metadata": {
+        "kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"}
+      },
+      "nbformat": 4,
+      "nbformat_minor": 4
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notebook
+  namespace: vaxgenesis
+  labels:
+    app: notebook
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notebook
+  template:
+    metadata:
+      labels:
+        app: notebook
+    spec:
+      containers:
+        - name: jupyter
+          image: jupyter/scipy-notebook:latest
+          ports:
+            - containerPort: 8888
+          env:
+            - name: JUPYTER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: vaxgenesis-secrets
+                  key: notebook-token
+            - name: BACKEND_URL
+              value: "http://backend:8000"
+          volumeMounts:
+            - name: notebooks
+              mountPath: /home/jovyan/notebooks
+              readOnly: true
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 2000m
+              memory: 4Gi
+      volumes:
+        - name: notebooks
+          configMap:
+            name: vaxgenesis-notebooks
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notebook
+  namespace: vaxgenesis
+spec:
+  selector:
+    app: notebook
+  ports:
+    - port: 8888
+      targetPort: 8888

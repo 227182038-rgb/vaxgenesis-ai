@@ -1,0 +1,62 @@
+# Audit v2.0 — SBOM generation via CycloneDX
+#
+# Generates a Software Bill of Materials for every container image build.
+# Stored alongside the image in the registry and uploaded to a configured
+# SBOM repository (e.g. Dependency-Track).
+
+name: SBOM Generation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/**"
+  workflow_dispatch:
+
+jobs:
+  sbom:
+    name: Generate SBOM (CycloneDX)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install CycloneDX
+        run: pip install cyclonedx-bom
+
+      - name: Generate backend SBOM
+        working-directory: apps/backend
+        run: |
+          cyclonedx-py environment -o sbom-backend.json --format json
+          cat sbom-backend.json | python -m json.tool | head -20
+
+      - name: Generate frontend SBOM
+        working-directory: apps/frontend
+        run: |
+          npm install --legacy-peer-deps
+          npx @cyclonedx/cyclonedx-npm --output-format json --output-file sbom-frontend.json
+
+      - name: Upload SBOMs
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: |
+            apps/backend/sbom-backend.json
+            apps/frontend/sbom-frontend.json
+
+      - name: Upload to Dependency-Track (if configured)
+        if: secrets.DEPENDENCY_TRACK_API_KEY != ''
+        env:
+          DT_URL: ${{ secrets.DEPENDENCY_TRACK_URL }}
+          DT_KEY: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
+          DT_PROJECT: vaxgenesis-backend
+        run: |
+          curl -X POST "$DT_URL/api/v1/bom" \
+            -H "X-API-Key: $DT_KEY" \
+            -H "Content-Type: multipart/form-data" \
+            -F "projectName=$DT_PROJECT" \
+            -F "bom=@apps/backend/sbom-backend.json"

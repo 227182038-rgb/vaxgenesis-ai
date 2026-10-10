@@ -1,0 +1,12 @@
+{
+  "name": "Influenza A H1N1 pdm09",
+  "lineage": "H1N1pdm09",
+  "source": "nextstrain",
+  "source_acc": "NEXTSTRAIN_FLU_H1N1_001",
+  "sequence": "ATGGAGAGGCAAGAGACTATGATTCTGGATCTGTCGTCACAATGGAAAGAACGTGACT",
+  "collection_date": "2026-01-05T00:00:00Z",
+  "geography": "Australia",
+  "mutations": [
+    {"position": 5, "ref": "G", "var": "A", "type": "substitution"}
+  ]
+}

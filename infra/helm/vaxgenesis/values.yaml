@@ -1,0 +1,11 @@
+image:
+  backend: { repository: vaxgenesis/backend, tag: "2.0.0" }
+  frontend: { repository: vaxgenesis/frontend, tag: "2.0.0" }
+
+backend: { replicas: 3, resources: { requests: { cpu: 500m, memory: 1Gi } } }
+frontend: { replicas: 2 }
+
+ingress:
+  enabled: true
+  hosts:
+    - host: vaxgenesis.ai

@@ -1,0 +1,12 @@
+{
+  "name": "SARS-CoV-2 Delta B.1.617.2",
+  "lineage": "B.1.617.2",
+  "source": "gisaid",
+  "source_acc": "EPI_ISL_23456789",
+  "sequence": "ATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCG",
+  "collection_date": "2025-12-15T00:00:00Z",
+  "geography": "India",
+  "mutations": [
+    {"position": 1, "ref": "A", "var": "T", "type": "substitution"}
+  ]
+}

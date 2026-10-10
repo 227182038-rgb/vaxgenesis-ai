@@ -1,0 +1,108 @@
+# Audit v2.0 — HashiCorp Vault integration
+#
+# Deploys Vault via the official Helm chart and configures:
+#   - Database secrets engine (dynamic RDS credentials)
+#   - Transit secrets engine (encryption as a service)
+#   - Kubernetes auth method (pods authenticate via service account)
+#   - ExternalSecrets operator to sync secrets to K8s Secrets
+
+---
+# Vault server deployment (dev mode — replace with HA mode for production)
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vault
+  namespace: vault
+spec:
+  serviceName: vault
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vault
+  template:
+    metadata:
+      labels:
+        app: vault
+    spec:
+      containers:
+        - name: vault
+          image: hashicorp/vault:1.18
+          ports:
+            - containerPort: 8200
+          env:
+            - name: VAULT_DEV_ROOT_TOKEN_ID
+              value: "root"  # dev only; production uses sealed/unsealed vaults
+            - name: VAULT_DEV_LISTEN_ADDRESS
+              value: "0.0.0.0:8200"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 100
+            capabilities:
+              add: ["IPC_LOCK"]
+          volumeMounts:
+            - name: data
+              mountPath: /vault/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vault
+  namespace: vault
+spec:
+  selector:
+    app: vault
+  ports:
+    - port: 8200
+      targetPort: 8200
+---
+# ExternalSecrets: sync Vault secrets to K8s Secrets
+apiVersion: external-secrets.io/v1beta1
+kind: SecretStore
+metadata:
+  name: vault-backend
+  namespace: vaxgenesis
+spec:
+  provider:
+    vault:
+      server: "http://vault.vault:8200"
+      path: "kv"
+      version: "v2"
+      auth:
+        kubernetes:
+          mountPath: "kubernetes"
+          role: "vaxgenesis-role"
+          serviceAccountRef:
+            name: backend
+            namespace: vaxgenesis
+---
+# Example: sync the database password from Vault to a K8s Secret
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: db-credentials
+  namespace: vaxgenesis
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: vault-backend
+    kind: SecretStore
+  target:
+    name: db-credentials
+    creationPolicy: Owner
+  data:
+    - secretKey: password
+      remoteRef:
+        key: vaxgenesis/database
+        property: password
+    - secretKey: username
+      remoteRef:
+        key: vaxgenesis/database
+        property: username

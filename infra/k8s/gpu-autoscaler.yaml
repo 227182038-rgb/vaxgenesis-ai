@@ -1,0 +1,97 @@
+# Audit 5.6 — NVIDIA GPU Operator + cluster autoscaler for GPU nodes
+#
+# Installs the NVIDIA GPU Operator (manages driver/DCGM/device-plugin
+# on GPU nodes) and configures the cluster autoscaler to scale GPU
+# node groups based on pending pods that request nvidia.com/gpu.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nvidia-gpu-operator
+  namespace: gpu-operator-resources
+  labels:
+    app: gpu-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gpu-operator
+  template:
+    metadata:
+      labels:
+        app: gpu-operator
+    spec:
+      serviceAccountName: gpu-operator
+      containers:
+        - name: gpu-operator
+          image: nvcr.io/nvidia/gpu-operator:v23.9.1
+          args:
+            - --config=/etc/gpu-operator/config.yaml
+          volumeMounts:
+            - name: config
+              mountPath: /etc/gpu-operator
+      volumes:
+        - name: config
+          configMap:
+            name: gpu-operator-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gpu-operator-config
+  namespace: gpu-operator-resources
+data:
+  config.yaml: |
+    driver:
+      enabled: true
+      version: "535-headers"
+    toolkit:
+      enabled: true
+    devicePlugin:
+      enabled: true
+      config:
+        name: default
+        share:
+          cti:
+            enabled: false
+    dcgmExporter:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+    gfd:
+      enabled: true
+---
+# Cluster autoscaler config (deployed via Helm in production; this is
+# the configuration snippet for the GPU node group)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-autoscaler-gpu-config
+  namespace: kube-system
+data:
+  autoscaler-config.yaml: |
+    cluster-autoscaler:
+      scale-down-unneeded-time: 10m
+      scale-down-delay-after-add: 10m
+      scale-down-unready-time: 20m
+      max-node-provision-time: 25m
+      expander: priority
+      # Prioritize GPU node groups only when GPU pods are pending
+      priorities:
+        - name: gpu-priority
+          weight: 100
+          matcher:
+            labels:
+              - key: k8s.amazonaws.com/accelerator
+                value: nvidia-gpu
+---
+# GPU pod resource quota (prevents runaway GPU usage)
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: gpu-quota
+  namespace: vaxgenesis
+spec:
+  hard:
+    requests.nvidia.com/gpu: "8"
+    limits.nvidia.com/gpu: "8"

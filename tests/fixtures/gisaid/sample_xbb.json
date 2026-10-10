@@ -1,0 +1,14 @@
+{
+  "name": "SARS-CoV-2 Omicron XBB.1.5",
+  "lineage": "XBB.1.5",
+  "source": "gisaid",
+  "source_acc": "EPI_ISL_12345678",
+  "sequence": "ATTTAGTGTTTATTTAGTGTTTATTTAGTGTTTATTTAGTGTTTATTTAGTGTTT",
+  "collection_date": "2026-01-10T00:00:00Z",
+  "geography": "USA",
+  "mutations": [
+    {"position": 1, "ref": "A", "var": "T", "type": "substitution"},
+    {"position": 5, "ref": "T", "var": "G", "type": "substitution"},
+    {"position": 12, "ref": "T", "var": "C", "type": "substitution"}
+  ]
+}

@@ -1,0 +1,98 @@
+name: vaxgenesis
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: vgx-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-vaxgenesis}
+      POSTGRES_USER: ${POSTGRES_USER:-vaxgenesis}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vaxgenesis}
+    ports: ["5432:5432"]
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vaxgenesis"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  neo4j:
+    image: neo4j:5.20-community
+    container_name: vgx-neo4j
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: neo4j/neo4jpass
+      NEO4J_PLUGINS: '["apoc"]'
+    ports: ["7474:7474", "7687:7687"]
+    volumes:
+      - neo4j-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:7474 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: vgx-redis
+    restart: unless-stopped
+    ports: ["6379:6379"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: vgx-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: vaxgenesis
+      MINIO_ROOT_PASSWORD: vaxgenesis-secret
+    ports: ["9000:9000", "9001:9001"]
+    volumes:
+      - minio-data:/data
+
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    container_name: vgx-backend
+    restart: unless-stopped
+    env_file: .env
+    ports: ["8000:8000"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    volumes:
+      - ./apps/backend:/app
+    command: >
+      sh -c "uvicorn vaxgenesis.main:app --host 0.0.0.0 --port 8000 --workers 4"
+
+  frontend:
+    build:
+      context: ./apps/frontend
+      dockerfile: Dockerfile
+    container_name: vgx-frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports: ["3000:3000"]
+    depends_on:
+      backend: {condition: service_healthy}
+
+networks:
+  default:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  neo4j-data:
+  redis-data:
+  minio-data:

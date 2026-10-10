@@ -1,0 +1,72 @@
+# Audit v1.2 — Helm values additions for hexagonal architecture
+#
+# This file is APPENDED to the existing values.yaml via Helm's --values flag:
+#   helm install vaxgenesis infra/helm/vaxgenesis \
+#     -f infra/helm/vaxgenesis/values.yaml \
+#     -f infra/helm/vaxgenesis/values-v12.yaml
+#
+# It does NOT override existing values; it only adds new ones.
+
+# ============================================================
+# Hexagonal architecture settings (v1.2)
+# ============================================================
+hexagon:
+  enabled: true
+  # Mount the v2 API router alongside v1
+  api:
+    version: "v2"
+    prefix: "/api/v2"
+    rate_limit_per_minute: 600
+
+  # DI container profile: "memory" (dev/test) or "production" (SQLAlchemy)
+  container_profile: "production"
+
+  # Domain layer settings
+  domain:
+    # Enforce immutable value objects
+    frozen_value_objects: true
+    # Validate at construction time (never allow invalid state)
+    strict_validation: true
+
+  # Event bus configuration
+  event_bus:
+    # "memory" for single-instance, "redis" for multi-instance
+    backend: "redis"
+    redis_channel: "vaxgenesis.events"
+
+# ============================================================
+# Property-based test settings (CI only)
+# ============================================================
+testing:
+  property:
+    enabled: true
+    hypothesis_max_examples: 100
+    hypothesis_deadline_ms: 500
+    hypothesis_seed: 0  # deterministic for reproducibility
+
+  benchmark:
+    enabled: true
+    # Fail CI if any benchmark regresses by more than 20%
+    regression_threshold_pct: 20
+    # Store baseline in this S3 path
+    baseline_uri: "s3://vaxgenesis-artifacts/benchmarks/baseline.json"
+
+# ============================================================
+# Jupyter notebook deployment (for internal demos)
+# ============================================================
+notebook:
+  enabled: false  # disabled by default; enable for demo environments
+  image: "jupyter/scipy-notebook:latest"
+  port: 8888
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+  # Mount the notebooks directory from the repo
+  volumes:
+    - name: notebooks
+      configMap:
+        name: vaxgenesis-notebooks

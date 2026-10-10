@@ -1,0 +1,85 @@
+# Audit 5.5 — Chaos engineering with Chaos Mesh
+#
+# Applies to the vaxgenesis namespace.
+# Chaos Mesh must be installed on the cluster first:
+#   kubectl apply -f https://mirrors.chaos-mesh.org/chaos-mesh-v2.7.0.yaml
+#
+# These experiments are SAFE to run in staging; they validate that:
+#   1. Killing a backend pod doesn't cause 5xx errors (HPA + replicas)
+#   2. Network latency between backend and postgres doesn't cause timeouts
+#   3. Redis unavailability degrades gracefully (cache falls back to no-op)
+
+---
+# Experiment 1: Kill a random backend pod every 5 minutes
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: backend-pod-kill
+  namespace: vaxgenesis
+spec:
+  action: pod-kill
+  mode: one
+  selector:
+    namespaces:
+      - vaxgenesis
+    labelSelectors:
+      app: backend
+  scheduler:
+    cron: "@every 5m"
+  duration: "30s"
+
+---
+# Experiment 2: Inject 200ms latency between backend and postgres
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: backend-postgres-latency
+  namespace: vaxgenesis
+spec:
+  action: delay
+  mode: all
+  selector:
+    namespaces:
+      - vaxgenesis
+    labelSelectors:
+      app: backend
+  delay:
+    latency: "200ms"
+    correlation: "100"
+    jitter: "20ms"
+  direction: to
+  target:
+    selector:
+      namespaces:
+        - vaxgenesis
+      labelSelectors:
+        app: postgres
+  duration: "60s"
+  scheduler:
+    cron: "@every 1h"
+
+---
+# Experiment 3: Make Redis unavailable for 30 seconds
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: redis-partition
+  namespace: vaxgenesis
+spec:
+  action: partition
+  mode: all
+  selector:
+    namespaces:
+      - vaxgenesis
+    labelSelectors:
+      app: redis
+  direction: to
+  target:
+    selector:
+      namespaces:
+        - vaxgenesis
+      labelSelectors:
+        app: backend
+  duration: "30s"
+  scheduler:
+    cron: "@every 6h"
